@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上海市人口热力图 - 交互式地图</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: "Microsoft YaHei", "SimHei", sans-serif;
+            background: #1a1a2e;
+            overflow: hidden;
+        }
+        #header {
+            background: linear-gradient(135deg, #0f3460, #16213e);
+            color: white;
+            padding: 12px 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        #header h1 {
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+        #header p {
+            font-size: 13px;
+            opacity: 0.85;
+        }
+        #controls {
+            background: #16213e;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            flex-wrap: wrap;
+        }
+        .time-btn {
+            padding: 7px 18px;
+            border: 2px solid #e94560;
+            background: transparent;
+            color: #e94560;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .time-btn:hover {
+            background: #e94560;
+            color: white;
+        }
+        .time-btn.active {
+            background: #e94560;
+            color: white;
+            box-shadow: 0 3px 15px rgba(233,69,96,0.4);
+        }
+        #map-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 120px);
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #1a1a2e;
+        }
+        #stats-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(22, 33, 62, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            min-width: 180px;
+            border: 1px solid rgba(233,69,96,0.3);
+        }
+        #stats-panel h3 {
+            font-size: 15px;
+            color: #e94560;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #e94560;
+            padding-bottom: 5px;
+        }
+        #stats-panel .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 7px 0;
+            font-size: 12px;
+        }
+        #stats-panel .stat-label {
+            color: #a0a0a0;
+        }
+        #stats-panel .stat-value {
+            font-weight: bold;
+            color: #fff;
+        }
+        #legend-panel {
+            position: absolute;
+            bottom: 30px;
+            right: 15px;
+            background: rgba(22, 33, 62, 0.95);
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            border: 1px solid rgba(233,69,96,0.3);
+        }
+        #legend-panel h4 {
+            font-size: 13px;
+            color: #e94560;
+            margin-bottom: 8px;
+        }
+        .legend-gradient {
+            width: 180px;
+            height: 18px;
+            background: linear-gradient(to right, 
+                #e0f7fa, 
+                #80deea, 
+                #26c6da, 
+                #66bb6a, 
+                #fdd835, 
+                #ff9800, 
+                #f44336, 
+                #c62828, 
+                #4a0000);
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #a0a0a0;
+        }
+        .leaflet-control-attribution {
+            font-size: 10px !important;
+            background: rgba(0,0,0,0.7) !important;
+            color: #aaa !important;
+        }
+        .leaflet-control-attribution a {
+            color: #aaa !important;
+        }
+        .leaflet-tile {
+            background: #1a1a2e !important;
+        }
+        .leaflet-tile-loaded {
+            background: transparent !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>上海市人口热力图</h1>
+        <p>基于高德地图 · 2025年3月22日与25日平均值 · 不同时段人口密集程度对比</p>
+    </div>
+    
+    <div id="controls">
+        <button class="time-btn active" onclick="switchTime('07:00')">07:00 清晨</button>
+        <button class="time-btn" onclick="switchTime('12:00')">12:00 中午</button>
+        <button class="time-btn" onclick="switchTime('17:00')">17:00 傍晚</button>
+        <button class="time-btn" onclick="switchTime('22:00')">22:00 夜间</button>
+    </div>
+    
+    <div id="map-container">
+        <div id="map"></div>
+        
+        <div id="stats-panel">
+            <h3>数据统计</h3>
+            <div class="stat-item">
+                <span class="stat-label">当前时段:</span>
+                <span class="stat-value" id="current-time">07:00</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">数据点数:</span>
+                <span class="stat-value" id="data-count">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">最大值:</span>
+                <span class="stat-value" id="max-value">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">平均值:</span>
+                <span class="stat-value" id="avg-value">-</span>
+            </div>
+        </div>
+        
+        <div id="legend-panel">
+            <h4>人口密度</h4>
+            <div class="legend-gradient"></div>
+            <div class="legend-labels">
+                <span>低</span>
+                <span>中</span>
+                <span>高</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Heat -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+    <!-- 数据 -->
+    <script src="heatmap_data.js"></script>
+    
+    <script>
+        let map;
+        let heatLayer;
+        let currentTimeSlot = '07:00';
+        let currentBaseLayer;
+        let retryCount = {};
+        const MAX_RETRY = 3;
+        
+        function handleTileError(tile, url) {
+            const key = url || tile.src;
+            if (!retryCount[key]) retryCount[key] = 0;
+            if (retryCount[key] < MAX_RETRY) {
+                retryCount[key]++;
+                setTimeout(() => {
+                    tile.src = url + '?retry=' + retryCount[key];
+                }, 500 * retryCount[key]);
+            } else {
+                tile.style.display = 'none';
+            }
+        }
+        
+        function initMap() {
+            map = L.map('map', {
+                backgroundColor: '#1a1a2e',
+                preferCanvas: true
+            }).setView([31.281, 121.508], 15);
+            
+            // 高德地图底图
+            currentBaseLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                attribution: '&copy; 高德地图',
+                maxZoom: 18,
+                subdomains: '1234',
+                crossOrigin: true,
+                tileSize: 256,
+                updateWhenIdle: false,
+                keepBuffer: 2
+            }).addTo(map);
+            
+            map.on('tileerror', function(error, tile) {
+                handleTileError(tile, error.url);
+            });
+            
+            L.control.scale({ metric: true, imperial: false }).addTo(map);
+            loadHeatmapData('07:00');
+        }
+        
+        function loadHeatmapData(timeSlot) {
+            if (!HEATMAP_DATA || !HEATMAP_DATA[timeSlot]) return;
+            
+            const data = HEATMAP_DATA[timeSlot];
+            
+            if (heatLayer) map.removeLayer(heatLayer);
+            
+            const heatPoints = data.data.map(item => [item.lat, item.lng, item.count]);
+            
+            heatLayer = L.heatLayer(heatPoints, {
+                radius: 40,
+                blur: 25,
+                maxZoom: 100,
+                max: data.max,
+                minOpacity: 0.4,
+                gradient: {
+                    0.00: '#e0f7fa',
+                    0.05: '#80deea',
+                    0.15: '#26c6da',
+                    0.25: '#66bb6a',
+                    0.40: '#fdd835',
+                    0.55: '#ff9800',
+                    0.70: '#f44336',
+                    0.85: '#c62828',
+                    1.00: '#4a0000'
+                }
+            }).addTo(map);
+            
+            updateStats(timeSlot, data);
+        }
+        
+        function updateStats(timeSlot, data) {
+            document.getElementById('current-time').textContent = timeSlot;
+            document.getElementById('data-count').textContent = data.count;
+            document.getElementById('max-value').textContent = data.max.toFixed(1);
+            const sum = data.data.reduce((acc, item) => acc + item.count, 0);
+            document.getElementById('avg-value').textContent = (sum / data.count).toFixed(1);
+        }
+        
+        function switchTime(timeSlot) {
+            currentTimeSlot = timeSlot;
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.includes(timeSlot)) btn.classList.add('active');
+            });
+            loadHeatmapData(timeSlot);
+        }
+        
+        window.onload = function() { initMap(); };
+        setInterval(() => { retryCount = {}; }, 60000);
+    </script>
+</body>
+</html>
